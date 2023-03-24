@@ -48,10 +48,20 @@ class Post():
         self.time = None
         self.text = None
         
+        # If we somehow called a Post without actually having html text passed
         if not post:
             return None
-
-        # Find post number 1-50 in page
+        
+        # Go through post html and acquire post data
+        self.getPostID(post)
+        self.getAuthor(post)
+        self.getTime(post)
+        self.getText(post)
+        
+    
+    def getPostID(self, post) -> None:
+        ''' Find post number 1-50 in page text '''
+        
         # First find all tags that match the post number config        
         idNumPost = post.find_all('div', class_='small-2 large-6 columns text-right')
         
@@ -65,48 +75,58 @@ class Post():
                     # then extract the number as the post number for the page
                     # add 50*(page_number -1) to get the post number in the 
                     # entire thread. This is our post id
-                    self.id = 50*(int(pagenum)-1) + int(idf.group()[2:-1])
-        
-        # If we can't find a post id, this isn't a post
-        if not self.id:
-            return None
+                    self.id = 50*(self.page - 1) + int(idf.group()[2:-1])
+    
+    def getAuthor(self, post) -> None:
+        ''' Get post author from post html text '''
         
         # Check for anchor tag with author
         try:
             self.author = post.find('a').text.strip()
         # If we can't find it then this is not a valid post
         except AttributeError:
-            return None
+            self.author = None
         
+        # If author name len is 0 or neg, set to None - not a valid post
         if len(self.author) <= 0:
-            return None
+            self.author = None
+
+    def getTime(self, post) -> None:
+        ''' Get post time from post html text '''
         
-        # Do similar process for post time, get time, return None if not found
         try:
             # Keep time as a string for now
             timestr = post.find('div', class_='timestamp').contents[1].text.strip()
             self.time = " ".join(timestr.split()[1:-1])
+        # if we run into errors getting time from text, we likely are not looking
+        # at an actual post, so set time to None
         except IndexError:
             print('Post time not found')
-            return None
+            self.time = None
         except AttributeError:
             print('Post time not found')
-            return None
+            self.time = None
         
         if len(self.time) <= 0:
-            # One final check of time
-            return None
-            
-        # lastly get post text in similar manner, return None if not found
+            # One final check of time to ensure we extracted it correctly
+            self.time = None
+    
+    def getText(self, post) -> None:
+        ''' Get post text from post html text '''
         try:
             self.text = post.find('div', class_='body').text.strip()
         except KeyError:
-            return None
+            # If we can't find div with body class 
+            self.text = None
         
         # Don't return None for len(text) == 0, it may be an img or something 
         # stripped but is still a valid post
 
 class ArfcomThread():
+    ''' Arfcom thread class which holds the database of a thread containing
+    all the posts in teh thread. Has methods for processing thread data. Can
+    be added on to with more analysis methods.
+    '''
     
     def __init__(self, databaseName) -> None:
         ''' Init an 'ArfcomThread' object from a database filename '''
@@ -202,7 +222,7 @@ class ArfcomThread():
                     # Create post instance
                     newpost = Post(post, pagenum=page)
                     # Double check all post components are present and insert into db
-                    if newpost.author and newpost.time and newpost.text:
+                    if newpost.id and newpost.author and newpost.time and newpost.text:
                         postEntities = (newpost.id, newpost.author, newpost.time, newpost.text, newpost.page)
                         sql_insert(sqlCon, postEntities)
             page += 1
